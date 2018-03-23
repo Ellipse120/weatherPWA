@@ -37,9 +37,21 @@
 		var selected = select.options[select.selectedIndex];
 		var key = selected.value;
 		var label = selected.textContent;
-		// todo init the selectedCities array
+		if (!app.selectedCities) {
+			app.selectedCities = [];
+		}
 		app.getForecast(key, label);
+		app.selectedCities.push({key: key, label: label});
+		app.saveSelectedCities();
+		app.toggleAddDialog(false);
 	})
+
+	/**
+	 * Close the add new city dialog
+	 */
+	document.getElementById('butAddCancel').addEventListener('click', function() {
+		app.toggleAddDialog(false);
+	});
 
 
 	/***************************************
@@ -59,14 +71,6 @@
 		} else {
 			app.addDialog.classList.remove('dialog-container--visible');
 		}
-	}
-
-	app.updateForecasts = function (data) {
-
-	}
-
-	app.saveSelectedCities = function () {
-
 	}
 
 	/***************************************
@@ -104,14 +108,83 @@
 	app.updateForecasts = function () {
 		var keys = Object.keys(app.visibleCards);
 		keys.forEach(function (key) { app.getForecast(key); })
-	}
+	};
+
+	app.saveSelectedCities = function () {
+		var selectedCities = JSON.stringify(app.selectedCities);
+		localStorage.selectedCities = selectedCities;
+	};
+
+	app.getIconClass = function(weatherCode) {
+		// Weather codes: https://developer.yahoo.com/weather/documentation.html#codes
+		weatherCode = parseInt(weatherCode);
+		switch (weatherCode) {
+			case 25: // cold
+			case 32: // sunny
+			case 33: // fair (night)
+			case 34: // fair (day)
+			case 36: // hot
+			case 3200: // not available
+				return 'clear-day';
+			case 0: // tornado
+			case 1: // tropical storm
+			case 2: // hurricane
+			case 6: // mixed rain and sleet
+			case 8: // freezing drizzle
+			case 9: // drizzle
+			case 10: // freezing rain
+			case 11: // showers
+			case 12: // showers
+			case 17: // hail
+			case 35: // mixed rain and hail
+			case 40: // scattered showers
+				return 'rain';
+			case 3: // severe thunderstorms
+			case 4: // thunderstorms
+			case 37: // isolated thunderstorms
+			case 38: // scattered thunderstorms
+			case 39: // scattered thunderstorms (not a typo)
+			case 45: // thundershowers
+			case 47: // isolated thundershowers
+				return 'thunderstorms';
+			case 5: // mixed rain and snow
+			case 7: // mixed snow and sleet
+			case 13: // snow flurries
+			case 14: // light snow showers
+			case 16: // snow
+			case 18: // sleet
+			case 41: // heavy snow
+			case 42: // scattered snow showers
+			case 43: // heavy snow
+			case 46: // snow showers
+				return 'snow';
+			case 15: // blowing snow
+			case 19: // dust
+			case 20: // foggy
+			case 21: // haze
+			case 22: // smoky
+				return 'fog';
+			case 24: // windy
+			case 23: // blustery
+				return 'windy';
+			case 26: // cloudy
+			case 27: // mostly cloudy (night)
+			case 28: // mostly cloudy (day)
+			case 31: // clear (night)
+				return 'cloudy';
+			case 29: // partly cloudy (night)
+			case 30: // partly cloudy (day)
+			case 44: // partly cloudy
+				return 'partly-cloudy-day';
+		}
+	};
 
 	/**
 	 * update a weather card with the latest weather forecast.
 	 * If the card doesn't already exist, it's cloned from the template.
 	 */
-	app.updateForecastCard = function (data) {
-		var dataLashUpdated = new Date(data.created);
+	app.updateForecastCard = function(data) {
+		var dataLastUpdated = new Date(data.created);
 		var sunrise = data.channel.astronomy.sunrise;
 		var sunset = data.channel.astronomy.sunset;
 		var current = data.channel.item.condition;
@@ -128,12 +201,15 @@
 			app.visibleCards[data.key] = card;
 		}
 
-		// check the data, verify latest
+		// Verifies the data provide is newer than what's already visible
+		// on the card, if it's not bail, if it is, continue and update the
+		// time saved in the card
 		var cardLastUpdatedElem = card.querySelector('.card-last-updated');
 		var cardLastUpdated = cardLastUpdatedElem.textContent;
 		if (cardLastUpdated) {
 			cardLastUpdated = new Date(cardLastUpdated);
-			if (dataLashUpdated.getTime() < cardLastUpdated.getTime()) {
+			// Bail if the card has more recent data then the data
+			if (dataLastUpdated.getTime() < cardLastUpdated.getTime()) {
 				return;
 			}
 		}
@@ -142,11 +218,14 @@
 		card.querySelector('.description').textContent = current.text;
 		card.querySelector('.date').textContent = current.date;
 		card.querySelector('.current .icon').classList.add(app.getIconClass(current.code));
-		card.querySelector('.current .temperature .value').textContent = Math.round(current.temp);
+		card.querySelector('.current .temperature .value').textContent =
+			Math.round(current.temp);
 		card.querySelector('.current .sunrise').textContent = sunrise;
 		card.querySelector('.current .sunset').textContent = sunset;
-		card.querySelector('.current .humidity').textContent = Math.round(humidity) + '%';
-		card.querySelector('.current .wind .value').textContent = Math.round(wind.speed);
+		card.querySelector('.current .humidity').textContent =
+			Math.round(humidity) + '%';
+		card.querySelector('.current .wind .value').textContent =
+			Math.round(wind.speed);
 		card.querySelector('.current .wind .direction').textContent = wind.direction;
 		var nextDays = card.querySelectorAll('.future .oneday');
 		var today = new Date();
@@ -155,10 +234,13 @@
 			var nextDay = nextDays[i];
 			var daily = data.channel.item.forecast[i];
 			if (daily && nextDay) {
-				nextDay.querySelector('.date').textContent = app.daysOfWeek[(i + today) % 7];
+				nextDay.querySelector('.date').textContent =
+					app.daysOfWeek[(i + today) % 7];
 				nextDay.querySelector('.icon').classList.add(app.getIconClass(daily.code));
-				nextDay.querySelector('.temp-high .value').textContent = Math.round(daily.high);
-				nextDay.querySelector('.temp-low .value').textContent = Math.round(daily.low);
+				nextDay.querySelector('.temp-high .value').textContent =
+					Math.round(daily.high);
+				nextDay.querySelector('.temp-low .value').textContent =
+					Math.round(daily.low);
 			}
 		}
 		if (app.isLoading) {
@@ -166,7 +248,6 @@
 			app.container.removeAttribute('hidden');
 			app.isLoading = false;
 		}
-
 	};
 
 	/***************************************
@@ -210,6 +291,31 @@
 		}
 	};
 
-	app.updateForecastCard(initialWeatherForecast);
 
+	/************************************************************************
+	 *   LocalStorage is a synchronous API and has serious performance
+	 *   implications. It should not be used in production applications!
+	 *   Instead, check out IDB (https://www.npmjs.com/package/idb) or
+	 *   SimpleDB (https://gist.github.com/inexorabletash/c8069c042b734519680c)
+	 ************************************************************************/
+
+	app.selectedCities = localStorage.selectedCities;
+	if (app.selectedCities) {
+		app.selectedCities = JSON.parse(app.selectedCities);
+		app.selectedCities.forEach(function(city) {
+			app.getForecast(city.key, city.label);
+		});
+	} else {
+		app.updateForecastCard(initialWeatherForecast);
+		app.selectedCities = [
+			{key: initialWeatherForecast.key, label: initialWeatherForecast.label}
+		];
+		app.saveSelectedCities();
+	}
+
+	if ('serviceWorker' in navigator) {
+		navigator.serviceWorker
+			.register('./service-worker.js')
+			.then(function() { console.log('Service Worker Registered'); });
+	}
 })();
