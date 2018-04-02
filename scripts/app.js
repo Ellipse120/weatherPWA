@@ -82,7 +82,23 @@
 	app.getForecast = function (key, label) {
 		var statement = 'select * from weather.forecast where woeid=' + key;
 		var url = 'https://query.yahooapis.com/v1/public/yql?format=json&q=' + statement;
-		// TODO  add cache logic here
+		if ('caches' in window) {
+			/**
+			 * Check if the sw has already cached this city's weather data.
+			 * If the sw has the data, then display the cached data while the app fetches the latest data.
+			 */
+			caches.match(url).then(function (response) {
+				if (response) {
+					response.json().then(function updateFromCache(json) {
+						var results = json.query.results;
+						results.key = key;
+						results.label = label;
+						results.created = json.query.created;
+						app.updateForecastCard(results);
+					});
+				}
+			});
+		}
 
 		// Fetch the latest data
 		var request = new XMLHttpRequest();
@@ -94,7 +110,7 @@
 					results.key = key;
 					results.label = label;
 					results.created = response.query.created;
-					app.updateForecasts(results);
+					app.updateForecastCard(results);
 				}
 			} else {
 				app.updateForecastCard(initialWeatherForecast);
@@ -111,8 +127,7 @@
 	};
 
 	app.saveSelectedCities = function () {
-		var selectedCities = JSON.stringify(app.selectedCities);
-		localStorage.selectedCities = selectedCities;
+		localStorage.selectedCities = JSON.stringify(app.selectedCities);
 	};
 
 	app.getIconClass = function(weatherCode) {
